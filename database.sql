@@ -13123,6 +13123,80 @@ INSERT INTO sku_detail VALUES
 ('P181645','JBS_IFAM-032',0,0,'Others')
 ;
 
+
+/*Question 1:
+During the transactions that occurred in 2021, in which month did the total transaction value 
+(after_discount) reach its highest? Use is_valid = 1 to filter transaction data. 
+Source table : order_detail*/
+
+SELECT DATE_FORMAT(order_date, '%m') AS Month_ID, DATE_FORMAT(order_date, '%M') AS Month,DATE_FORMAT(order_date, '%Y') AS Year,SUM(after_discount) AS total_transaction
+FROM order_detail
+WHERE YEAR(order_date) = 2021 AND is_valid = 1
+GROUP BY Month_ID, Month, Year
+ORDER BY total_transaction DESC;
+
+
+/*Question: 2 During transactions in the year 2022, which category generated the highest transaction value? 
+Use is_valid = 1 to filter transaction data. Source table : order_detail, sku_detail*/
+
+SELECT DATE_FORMAT(ordet.order_date, '%Y') AS year, skudet.category,SUM(ordet.after_discount) AS total_transaction
+FROM order_detail AS ordet
+JOIN sku_detail AS skudet ON ordet.sku_id = skudet.id
+WHERE ordet.is_valid = 1 AND DATE_FORMAT(ordet.order_date, '%Y') = '2022'
+GROUP BY DATE_FORMAT(ordet.order_date, '%Y'),skudet.category
+ORDER BY total_transaction DESC;
+    
+/*Question 3: Compare the transaction values of each category in the years 2021 and 2022. 
+Mention which categories experienced an increase and which categories experienced a decrease in transaction values from 2021 to 2022. 
+Use is_valid = 1 to filter transaction data. 
+Source table : order_detail, sku_detail*/
+
+with final_table as (select skudet.category,
+SUM(case when extract(year from ordet.order_date) = 2021 then ordet.after_discount end) as transaction_2021,
+SUM(case when extract(year from ordet.order_date) = 2022 then ordet.after_discount end) as transaction_2022
+from order_detail as ordet
+join sku_detail as skudet on ordet.sku_id = skudet.id
+where ordet.is_valid = 1
+group by 1
+order by 1)
+select *, (transaction_2022 - transaction_2021) as delta,
+case when transaction_2022>transaction_2021 then 'INCREASE' else 'DECREASE' end as remark
+from final_table
+
+/* Question 4: Display the top 5 most popular payment methods used during 2022 (based on total unique orders). 
+Use is_valid = 1 to filter transaction data.
+Source table : order_detail, payment_detail*/
+
+SELECT paydet.payment_method, DATE_FORMAT(ordet.order_date, '%Y') AS year,
+COUNT(DISTINCT ordet.id) AS freq
+FROM order_detail AS ordet
+JOIN payment_detail AS paydet ON ordet.payment_id = paydet.id
+WHERE ordet.is_valid = 1 AND YEAR(ordet.order_date) = 2022
+GROUP BY paydet.payment_method,DATE_FORMAT(ordet.order_date, '%Y')
+ORDER BY freq DESC
+LIMIT 5;
+
+/* Question 5: Sort these 5 products based on their transaction values.
+1. Samsung, 2. Apple, 3. Sony, 4. Huawei, 5. Lenovo
+Use is_valid = 1 to filter transaction data. */
+
+WITH final_table AS (SELECT
+CASE
+WHEN LOWER(skudet.sku_name) LIKE '%samsung%' THEN 'Samsung'
+WHEN LOWER(skudet.sku_name) LIKE '%apple%' OR LOWER(skudet.sku_name) LIKE '%iphone%' OR LOWER(skudet.sku_name) LIKE '%macbook%' THEN 'Apple'
+WHEN LOWER(skudet.sku_name) LIKE '%sony%' THEN 'Sony'
+WHEN LOWER(skudet.sku_name) LIKE '%huawei%' THEN 'Huawei'
+WHEN LOWER(skudet.sku_name) LIKE '%lenovo%' THEN 'Lenovo'
+END AS product_brand,SUM(ordet.after_discount) AS total_transaction
+FROM order_detail AS ordet
+JOIN sku_detail AS skudet ON ordet.sku_id = skudet.id
+WHERE ordet.is_valid = 1
+GROUP BY product_brand)
+SELECT *
+FROM final_table
+WHERE product_brand IS NOT NULL
+ORDER BY total_transaction DESC;
+
 /*Question 1. Comparing Sales Trends for Multiple Categories in 2022 
 Scenario: The Marketing Team wants to compare the sales trends for 
 multiple categories in 2022 to identify which category performed best.
@@ -13130,9 +13204,7 @@ Requirements: 1. Aggregate the sales data by category for 2022.
  Key Features to Use: • category • order_date (for time series analysis) • qty_ordered
 */
 
-SELECT s.category AS category,
-DATE_FORMAT(o.order_date, '%Y-%m') AS order_month,
-SUM(o.qty_ordered) AS total_quantity
+SELECT s.category AS category,DATE_FORMAT(o.order_date, '%Y-%m') AS order_month,SUM(o.qty_ordered) AS total_quantity
 FROM order_detail o
 JOIN sku_detail s ON o.sku_id = s.id
 WHERE YEAR(o.order_date) = 2022
@@ -13147,32 +13219,20 @@ Requirements: 1. Create two datasets for each period (e.g., 2021 and 2022), aggr
 Key Features to Use: • sku_name (for product names) • order_date (for filtering by year) • qty_ordered (for sales data)
 */
 
-WITH sales_2021 AS (SELECT s.sku_name,
-SUM(o.qty_ordered) AS total_2021
+WITH sales_by_year AS (SELECT s.sku_name,YEAR(o.order_date) AS order_year,SUM(o.qty_ordered) AS total_sales
 FROM order_detail o
 JOIN sku_detail s ON o.sku_id = s.id
-WHERE YEAR(o.order_date) = 2021
-GROUP BY s.sku_name),
-sales_2022 AS (SELECT s.sku_name,
-SUM(o.qty_ordered) AS total_2022
-FROM order_detail o
-JOIN sku_detail s ON o.sku_id = s.id
-WHERE YEAR(o.order_date) = 2022
-GROUP BY s.sku_name)
-SELECT COALESCE(s2022.sku_name, s2021.sku_name) AS sku_name,
-COALESCE(s2021.total_2021, 0) AS sales_2021,
-COALESCE(s2022.total_2022, 0) AS sales_2022,
-(COALESCE(s2022.total_2022, 0) - COALESCE(s2021.total_2021, 0)) AS sales_difference
-FROM sales_2021 s2021
-LEFT JOIN sales_2022 s2022 ON s2021.sku_name = s2022.sku_name
-UNION
-SELECT COALESCE(s2022.sku_name, s2021.sku_name) AS sku_name,
-COALESCE(s2021.total_2021, 0) AS sales_2021,
-COALESCE(s2022.total_2022, 0) AS sales_2022,
-(COALESCE(s2022.total_2022, 0) - COALESCE(s2021.total_2021, 0)) AS sales_difference
-FROM sales_2022 s2022
-LEFT JOIN sales_2021 s2021 ON s2021.sku_name = s2022.sku_name
-WHERE (COALESCE(s2022.total_2022, 0) - COALESCE(s2021.total_2021, 0)) < 0
+WHERE YEAR(o.order_date) IN (2021, 2022)
+GROUP BY s.sku_name, YEAR(o.order_date)),pivoted_sales AS (SELECT sku_name,SUM(
+CASE
+WHEN order_year = 2021 THEN total_sales ELSE 0 END) AS sales_2021,SUM(
+CASE
+WHEN order_year = 2022 THEN total_sales ELSE 0 END) AS sales_2022
+FROM sales_by_year
+GROUP BY sku_name)
+SELECT sku_name,sales_2021,sales_2022,(sales_2022 - sales_2021) AS sales_difference
+FROM pivoted_sales
+WHERE sales_2022 < sales_2021
 ORDER BY sales_difference ASC
 LIMIT 10;
 
@@ -13182,9 +13242,7 @@ for each product category to identify the most profitable categories.
 Requirements: Sort the categories by the highest to lowest net profit.
 Key Features to Use: • category • after_discount • cogs
 */
-SELECT s.category,
-YEAR(o.order_date) AS order_year,
-SUM(o.after_discount - s.cogs) AS net_profit
+SELECT s.category,YEAR(o.order_date) AS order_year,SUM(o.after_discount - s.cogs) AS net_profit
 FROM order_detail o
 JOIN sku_detail s ON o.sku_id = s.id
 GROUP BY s.category, order_year
@@ -13197,10 +13255,7 @@ for each product category before and after applying discounts.
 Key Features to Use: • category • before_discount • after_discount
 */
 
-SELECT s.category,
-SUM(o.before_discount) AS total_before_discount,
-SUM(o.after_discount) AS total_after_discount,
-SUM(o.before_discount - o.after_discount) AS discount_impact
+SELECT s.category,SUM(o.before_discount) AS total_before_discount,SUM(o.after_discount) AS total_after_discount,SUM(o.before_discount - o.after_discount) AS discount_impact
 FROM order_detail o
 JOIN sku_detail s ON o.sku_id = s.id
 GROUP BY s.category
