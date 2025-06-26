@@ -1,4 +1,4 @@
-/*create database sales;
+create database sales;
 use sales;
 create table if not exists customer_detail(
 id varchar(255),
@@ -9913,7 +9913,7 @@ CREATE TABLE IF NOT EXISTS sku_detail (
     base_price FLOAT,
     cogs FLOAT,
     category TEXT
-);*/
+);
 INSERT INTO sku_detail VALUES
 ('P798444','AT-FSM-35',57631.7,46052,'Kids & Baby'),
 ('P938347','AYS_Haier-18HNF',3931789.26,3499256,'Appliances'),
